@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>All Orders</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .status-paid {
+            background: #28a745;
+            color: white;
+        }
+        .status-unpaid {
+            background: #dc3545;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>All Orders</h1>
+        <table class="orders-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Product</th>
+                    <th>Price</th>
+                    <th>Status</th>
+                    <th>Created At</th>
+                    <th>Image</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td>{{ order.id }}</td>
+                    <td>{{ order.product_name }}</td>
+                    <td>{{ "%.2f"|format(order.price) }} грн.</td>
+                    <td>
+                        <span class="status-badge status-{{ 'paid' if order.is_paid else 'unpaid' }}">
+                            {{ "Paid" if order.is_paid else "Unpaid" }}
+                        </span>
+                    </td>
+                    <td>{{ order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else 'N/A' }}</td>
+                    <td><img src="{{ order.product_image_url }}" alt="Product" class="thumbnail"></td>
+                    <td>
+                        <button onclick="togglePaymentStatus({{ order.id }})" class="button">
+                            {{ "Mark as Unpaid" if order.is_paid else "Mark as Paid" }}
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <a href="/admin/" class="button">Back to Admin Panel</a>
+    </div>
+
+    <script>
+        async function togglePaymentStatus(orderId) {
+            if (!confirm('Are you sure you want to change the payment status?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/orders/${orderId}/toggle-payment`, {
+                    method: 'POST',
+                    credentials: 'include',  // This will include authentication credentials
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (response.ok) {
+                    window.location.reload();
+                } else {
+                    const errorData = await response.json();
+                    alert(errorData.detail || 'Failed to update payment status');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error updating payment status');
+            }
+        }
+    </script>
+</body>
+</html>

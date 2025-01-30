@@ -1,0 +1,141 @@
+<!-- admin.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Panel</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="admin-container">
+        <h1>Admin Panel</h1>
+
+        <div class="statistics">
+            <div class="stat-card">
+                <h3>Total Orders</h3>
+                <p>{{ total_orders }}</p>
+            </div>
+            <div class="stat-card">
+                <h3>Total Revenue</h3>
+                <p>{{ "%.2f"|format(total_revenue) }} грн.</p>
+            </div>
+            <div class="stat-card">
+                <h3>Paid Orders</h3>
+                <p>{{ paid_orders }}</p>
+            </div>
+        </div>
+
+        <div class="admin-sections">
+            <div class="section employees-section">
+                <h2>Employees Performance</h2>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Orders</th>
+                            <th>Sales</th>
+                            <th>Commission</th>
+                            <th>Hourly Rate</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for emp in employee_stats %}
+                        <tr>
+                            <td>{{ emp.name }}</td>
+                            <td>{{ emp.total_orders }}</td>
+                            <td>{{ "%.2f"|format(emp.total_sales) }} грн.</td>
+                            <td>{{ "%.2f"|format(emp.total_commission) }} грн.</td>
+                            <td>{{ "%.2f"|format(emp.hourly_rate) }} грн./час</td>
+                            <td>
+                                <span class="status-badge {{ 'active' if emp.is_active else 'inactive' }}">
+                                    {{ 'Active' if emp.is_active else 'Inactive' }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="section recent-orders-section">
+                <h2>Recent Orders</h2>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Product</th>
+                            <th>Price</th>
+                            <th>TTN</th>
+                            <th>Employee</th>
+                            <th>Status</th>
+                            <th>Created At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in recent_orders %}
+                        <tr>
+                            <td>{{ order.id }}</td>
+                            <td>{{ order.product_name }}</td>
+                            <td>{{ "%.2f"|format(order.price) }} грн.</td>
+                            <td>
+                                {% if order.ttn_number %}
+                                <a href="https://tracking.novaposhta.ua/#/{{ order.ttn_number }}"
+                                   target="_blank">{{ order.ttn_number }}</a>
+                                {% else %}
+                                No TTN
+                                {% endif %}
+                            </td>
+                            <td>{{ order.employee.name if order.employee else 'N/A' }}</td>
+                            <td>
+                                <span class="status-badge {{ 'paid' if order.is_paid else 'unpaid' }}">
+                                    {{ 'Paid' if order.is_paid else 'Unpaid' }}
+                                </span>
+                            </td>
+                            <td>{{ order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else 'N/A' }}</td>
+                            <td>
+                                <button onclick="togglePaymentStatus({{ order.id }})" class="button">
+                                    {{ "Mark as Unpaid" if order.is_paid else "Mark as Paid" }}
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="admin-actions">
+            <a href="/admin/orders/" class="button">View All Orders</a>
+            <a href="/employees/" class="button">Manage Employees</a>
+            <a href="/order-form" class="button">Create New Order</a>
+            <a href="/packing-queue" class="button">Packing Queue</a>
+        </div>
+    </div>
+
+    <script>
+        async function togglePaymentStatus(orderId) {
+            if (!confirm('Are you sure you want to change the payment status?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/orders/${orderId}/toggle-payment`, {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+
+                if (response.ok) {
+                    window.location.reload();
+                } else {
+                    alert('Failed to update payment status');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error updating payment status');
+            }
+        }
+    </script>
+</body>
+</html>

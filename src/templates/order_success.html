@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Order Submitted Successfully</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Order Submitted Successfully</h1>
+        <div class="order-details">
+            <h2>Order Details:</h2>
+            <div class="details-grid">
+                <div class="details-section">
+                    <h3>Product Information</h3>
+                    <p><strong>Product:</strong> {{ order.product_name }}</p>
+                    <p><strong>Price:</strong> {{ "%.2f"|format(order.price) }} грн.</p>
+                    <img src="{{ order.product_image_url }}" alt="Product Image" class="product-image">
+                </div>
+
+                <div class="details-section">
+                    <h3>Delivery Information</h3>
+                    <p><strong>TTN Number:</strong> {{ order.ttn_number }}</p>
+                    <p><strong>Recipient:</strong> {{ order.recipient_name }}</p>
+                    <p><strong>Phone:</strong> {{ order.recipient_phone }}</p>
+                    <p><strong>City:</strong> {{ order.city }}</p>
+                    <p><strong>Nova Poshta Office:</strong> №{{ order.warehouse_number }}</p>
+                </div>
+
+                <div class="details-section">
+                    <h3>Order Processing</h3>
+                    <p><strong>Assigned to:</strong> {{ order.employee.name }}</p>
+                    <p><strong>Order ID:</strong> {{ order.id }}</p>
+                    <p><strong>Created:</strong> {{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="actions">
+            <a href="/" class="button">Back to Home</a>
+            <a href="/order-form" class="button">Place Another Order</a>
+            {% if order.ttn_number %}
+            <a href="https://tracking.novaposhta.ua/#/{{ order.ttn_number }}"
+               class="button tracking-button" target="_blank">
+                Track Package
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Place New Order</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .form-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .form-section h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .loading {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        .error-message {
+            color: #dc3545;
+            margin-top: 5px;
+            font-size: 0.9em;
+        }
+        .warehouse-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .warehouse-item:hover {
+            background: #f8f9fa;
+        }
+        .warehouse-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .search-input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+                .settlement-info {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 2px;
+        }
+        .warehouse-details {
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        .warehouse-schedule {
+            font-size: 0.8em;
+            color: #666;
+        }
+        .delivery-info {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 4px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Place New Order</h1>
+        <form action="/orders/" method="post" class="order-form">
+            <!-- Product Information -->
+            <div class="form-section">
+                <h2>Product Information</h2>
+                <div class="form-group">
+                    <label for="product_name">Product Name:</label>
+                    <input type="text" id="product_name" name="product_name" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="product_image_url">Product Image URL:</label>
+                    <input type="url" id="product_image_url" name="product_image_url" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="price">Price:</label>
+                    <input type="number" id="price" name="price" step="0.01" required>
+                </div>
+            </div>
+
+            <!-- Nova Poshta Delivery Information -->
+            <div class="form-section">
+                <h2>Nova Poshta Delivery Information</h2>
+                <div class="form-group">
+                    <label for="recipient_name">Recipient Full Name:</label>
+                    <input type="text" id="recipient_name" name="recipient_name" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="recipient_phone">Recipient Phone:</label>
+                    <input type="tel" id="recipient_phone" name="recipient_phone"
+                           pattern="380[0-9]{9}" placeholder="380XXXXXXXXX" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="city_search">City:</label>
+                    <input type="text" id="city_search" class="search-input"
+                           placeholder="Start typing city name...">
+                    <div id="cityList" class="warehouse-list" style="display: none;"></div>
+                    <input type="hidden" id="city_ref" name="city_ref" required>
+                    <input type="hidden" id="city" name="city" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="warehouse_search">Nova Poshta Office:</label>
+                    <input type="text" id="warehouse_search" class="search-input"
+                           placeholder="Search for warehouse..." disabled>
+                    <div id="warehouseList" class="warehouse-list" style="display: none;"></div>
+                    <input type="hidden" id="warehouse_ref" name="warehouse_ref" required>
+                    <input type="hidden" id="warehouse_number" name="warehouse_number" required>
+                </div>
+            </div>
+
+            <!-- Employee Assignment -->
+            <div class="form-section">
+                <h2>Employee Assignment</h2>
+                <div class="form-group">
+                    <label for="employee_id">Assign Employee:</label>
+                    <select id="employee_id" name="employee_id" class="employee-select"
+                            onchange="showEmployeeDetails(this)" required>
+                        <option value="">Select Employee</option>
+                        {% for employee in employees %}
+                        <option value="{{ employee.id }}"
+                                data-rate="{{ employee.hourly_rate }}"
+                                data-commission="{{ employee.commission_percent }}">
+                            {{ employee.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div id="employeeDetails" class="employee-details">
+                        <p><strong>Hourly Rate:</strong> <span id="hourlyRate"></span> грн/час</p>
+                        <p><strong>Commission:</strong> <span id="commission"></span>%</p>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="button">Submit Order</button>
+        </form>
+    </div>
+
+    <script>
+        let settlements = [];
+        let warehouses = [];
+        let selectedCityRef = null;
+
+        // Загрузка населенных пунктов при загрузке страницы
+        window.onload = async function() {
+            document.getElementById('city_search').addEventListener('input', debounce(handleCitySearch, 300));
+            document.getElementById('warehouse_search').addEventListener('input', debounce(handleWarehouseSearch, 300));
+        };
+
+        // Функция debounce для оптимизации запросов
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Поиск населенных пунктов
+        async function handleCitySearch(event) {
+            const searchText = event.target.value;
+            const cityList = document.getElementById('cityList');
+
+            if (searchText.length < 2) {
+                cityList.style.display = 'none';
+                return;
+            }
+
+            try {
+                cityList.innerHTML = 'Загрузка...';
+                cityList.style.display = 'block';
+
+                const response = await fetch(`/api/np/settlements?search=${encodeURIComponent(searchText)}`);
+                const result = await response.json();
+                console.log('Search result:', result); // Отладка
+
+                if (result.success && result.data.length > 0) {
+                    cityList.innerHTML = result.data.map(settlement => `
+                        <div class="warehouse-item" onclick="selectSettlement('${settlement.ref}', '${settlement.name}')">
+                            <div>${settlement.name}</div>
+                            ${settlement.area || settlement.region ?
+                                `<div class="settlement-info">
+                                    ${[settlement.area, settlement.region].filter(Boolean).join(', ')}
+                                </div>` : ''
+                            }
+                        </div>
+                    `).join('');
+                } else {
+                    cityList.innerHTML = 'Населенных пунктов не найдено';
+                    setTimeout(() => {
+                        cityList.style.display = 'none';
+                    }, 2000);
+                }
+            } catch (error) {
+                console.error('Search error:', error);
+                cityList.innerHTML = 'Ошибка при поиске';
+                setTimeout(() => {
+                    cityList.style.display = 'none';
+                }, 2000);
+            }
+        }
+
+        // Выбор населенного пункта
+        async function selectSettlement(ref, name) {
+            document.getElementById('city_search').value = name;
+            document.getElementById('city_ref').value = ref;
+            document.getElementById('city').value = name;
+            document.getElementById('cityList').style.display = 'none';
+            selectedCityRef = ref;
+
+            // Включаем поиск отделений
+            const warehouseSearch = document.getElementById('warehouse_search');
+            warehouseSearch.disabled = false;
+            warehouseSearch.value = '';
+
+            // Загружаем отделения
+            await loadWarehouses();
+        }
+
+        // Загрузка отделений
+        async function loadWarehouses(search = '', page = 1) {
+            if (!selectedCityRef) return;
+
+            try {
+                const response = await fetch(
+                    `/api/np/warehouses/${selectedCityRef}?search=${encodeURIComponent(search)}&page=${page}`
+                );
+                const result = await response.json();
+
+                if (result.success) {
+                    warehouses = result.data;
+                    displayWarehouses(warehouses);
+                }
+            } catch (error) {
+                console.error('Failed to load warehouses:', error);
+            }
+        }
+
+        // Поиск отделений
+        async function handleWarehouseSearch(e) {
+            const searchText = e.target.value;
+            await loadWarehouses(searchText);
+        }
+
+        // Отображение списка отделений
+        function displayWarehouses(warehousesList) {
+            const warehouseList = document.getElementById('warehouseList');
+
+            if (warehousesList.length > 0) {
+                warehouseList.innerHTML = warehousesList.map(w => {
+                    // Форматирование номера отделения
+                    const number = w.number.padStart(4, '0');  // Добавляем ведущие нули
+
+                    return `
+                        <div class="warehouse-item" onclick="selectWarehouse('${w.ref}', '${w.number}', '${w.address}')">
+                            <div class="warehouse-header">
+                                <strong>Отделение №${number}</strong>
+                            </div>
+                            <div class="warehouse-address">${w.address}</div>
+                            ${w.phone ? `
+                                <div class="warehouse-contact">
+                                    <span class="icon">📞</span> ${w.phone}
+                                </div>
+                            ` : ''}
+                            <div class="warehouse-schedule">
+                                <span class="icon">🕒</span>
+                                <div class="schedule-details">
+                                    <div>ПН-ПТ: ${w.schedule.Monday}</div>
+                                    <div>СБ: ${w.schedule.Saturday}</div>
+                                    <div>ВС: ${w.schedule.Sunday}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                // Добавляем стили для отображения
+                addWarehouseStyles();
+                warehouseList.style.display = 'block';
+            } else {
+                warehouseList.innerHTML = '<div class="no-results">Отделения не найдены</div>';
+                warehouseList.style.display = 'block';
+            }
+        }
+
+        // Форматирование расписания работы
+        function addWarehouseStyles() {
+            // Добавляем стили, если их еще нет
+            if (!document.getElementById('warehouseStyles')) {
+                const styles = `
+                    .warehouse-item {
+                        padding: 15px;
+                        margin: 10px 0;
+                        background: white;
+                        border: 1px solid #ddd;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                    }
+                    .warehouse-item:hover {
+                        background: #f8f9fa;
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                    }
+                    .warehouse-header {
+                        font-size: 1.1em;
+                        margin-bottom: 5px;
+                    }
+                    .warehouse-address {
+                        color: #666;
+                        margin-bottom: 5px;
+                    }
+                    .warehouse-contact {
+                        font-size: 0.9em;
+                        color: #444;
+                        margin: 5px 0;
+                    }
+                    .warehouse-schedule {
+                        font-size: 0.85em;
+                        color: #666;
+                        margin-top: 5px;
+                    }
+                    .schedule-details {
+                        margin-left: 20px;
+                    }
+                    .icon {
+                        margin-right: 5px;
+                    }
+                    .no-results {
+                        text-align: center;
+                        padding: 20px;
+                        color: #666;
+                    }
+                `;
+
+                const styleSheet = document.createElement("style");
+                styleSheet.id = 'warehouseStyles';
+                styleSheet.textContent = styles;
+                document.head.appendChild(styleSheet);
+            }
+        }
+
+        // Выбор отделения
+        async function selectWarehouse(ref, number, address) {
+            document.getElementById('warehouse_search').value = `№${number} - ${address}`;
+            document.getElementById('warehouse_ref').value = ref;
+            document.getElementById('warehouse_number').value = number;
+            document.getElementById('warehouseList').style.display = 'none';
+
+            // Получаем стоимость доставки
+            try {
+                const price = document.getElementById('price').value;
+                if (selectedCityRef && price) {
+                    const response = await fetch(
+                        `/api/np/delivery-price?sender_city_ref=${selectedCityRef}&recipient_city_ref=${selectedCityRef}&cost=${price}`
+                    );
+                    const result = await response.json();
+
+                    if (result.success) {
+                        const deliveryInfo = document.querySelector('.delivery-info');
+                        deliveryInfo.innerHTML = `
+                            <p><strong>Стоимость доставки:</strong> ${result.data.cost} грн</p>
+                            <p><strong>Ориентировочная дата доставки:</strong> ${result.data.estimated_delivery_days}</p>
+                        `;
+                        deliveryInfo.style.display = 'block';
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to get delivery price:', error);
+            }
+        }
+
+        // Employee details (остается без изменений)
+        function showEmployeeDetails(select) {
+            const details = document.getElementById('employeeDetails');
+            const hourlyRate = document.getElementById('hourlyRate');
+            const commission = document.getElementById('commission');
+
+            if (select.value) {
+                const option = select.options[select.selectedIndex];
+                hourlyRate.textContent = option.dataset.rate;
+                commission.textContent = option.dataset.commission;
+                details.style.display = 'block';
+            } else {
+                details.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

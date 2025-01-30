@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Employee Management</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .employee-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 10px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .employee-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 10px;
+        }
+
+        .stat-item {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .employee-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background: white;
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Employee Management</h1>
+            <button onclick="showAddModal()" class="button">Add New Employee</button>
+        </header>
+
+        <div class="employees-list">
+            {% for employee in employees %}
+            <div class="employee-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2>{{ employee.name }}</h2>
+                    <span class="status-badge status-{{ 'active' if employee.is_active else 'inactive' }}">
+                        {{ 'Active' if employee.is_active else 'Inactive' }}
+                    </span>
+                </div>
+
+                <div class="employee-stats">
+                    <div class="stat-item">
+                        <h3>Hourly Rate</h3>
+                        <p>{{ "%.2f"|format(employee.hourly_rate) }} грн/час</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3>Commission</h3>
+                        <p>{{ "%.1f"|format(employee.commission_percent) }}%</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3>Monthly Orders</h3>
+                        <p>{{ employee.total_orders }}</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3>Monthly Sales</h3>
+                        <p>{{ "%.2f"|format(employee.total_sales) }} грн</p>
+                    </div>
+                    <div class="stat-item">
+                        <h3>Monthly Commission</h3>
+                        <p>{{ "%.2f"|format(employee.total_commission) }} грн</p>
+                    </div>
+                </div>
+
+                <div class="employee-actions">
+                    <button onclick="showEditModal({{ employee.id }})" class="button">
+                        Edit
+                    </button>
+                    <button onclick="toggleStatus({{ employee.id }})"
+                            class="button {{ 'danger' if employee.is_active else 'success' }}">
+                        {{ 'Deactivate' if employee.is_active else 'Activate' }}
+                    </button>
+                    <button onclick="showStats({{ employee.id }})" class="button">
+                        Detailed Stats
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Modal for adding/editing employee -->
+    <div id="employeeModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Add New Employee</h2>
+            <form id="employeeForm" method="post">
+                <div class="form-group">
+                    <label for="name">Name:</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="hourly_rate">Hourly Rate (грн):</label>
+                    <input type="number" id="hourly_rate" name="hourly_rate"
+                           step="0.01" min="0" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="commission_percent">Commission (%):</label>
+                    <input type="number" id="commission_percent" name="commission_percent"
+                           step="0.1" min="0" max="100" required>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="button">Save</button>
+                    <button type="button" onclick="closeModal()" class="button">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal for detailed stats -->
+    <div id="statsModal" class="modal">
+        <div class="modal-content">
+            <h2>Detailed Statistics</h2>
+            <div id="statsContent">
+                Loading...
+            </div>
+            <button onclick="closeStatsModal()" class="button">Close</button>
+        </div>
+    </div>
+
+    <script>
+        function showAddModal() {
+            const modal = document.getElementById('employeeModal');
+            const form = document.getElementById('employeeForm');
+            const title = document.getElementById('modalTitle');
+
+            title.textContent = 'Add New Employee';
+            form.action = '/employees/add';
+            form.reset();
+            modal.style.display = 'block';
+        }
+
+        function showEditModal(employeeId) {
+            const modal = document.getElementById('employeeModal');
+            const form = document.getElementById('employeeForm');
+            const title = document.getElementById('modalTitle');
+
+            title.textContent = 'Edit Employee';
+            form.action = `/employees/${employeeId}/update`;
+            form.method = 'post';
+
+            document.getElementById('name').value = "";
+            document.getElementById('hourly_rate').value = "";
+            document.getElementById('commission_percent').value = "";
+
+            modal.style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('employeeModal').style.display = 'none';
+        }
+
+        async function toggleStatus(employeeId) {
+            if (confirm('Are you sure you want to change this employee\'s status?')) {
+                try {
+                    const response = await fetch(`/employees/${employeeId}/toggle`, {
+                        method: 'POST'
+                    });
+                    if (response.ok) {
+                        window.location.reload();
+                    } else {
+                        alert('Failed to update status');
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Error updating status');
+                }
+            }
+        }
+
+        async function showStats(employeeId) {
+            const modal = document.getElementById('statsModal');
+            const content = document.getElementById('statsContent');
+            modal.style.display = 'block';
+            content.innerHTML = 'Loading...';
+
+            try {
+                const response = await fetch(`/employees/${employeeId}/stats`);
+                if (response.ok) {
+                    const stats = await response.json();
+
+                    // Форматируем статистику для отображения
+                    content.innerHTML = `
+                        <div class="detailed-stats">
+                            <div class="stat-row">
+                                <h3>Period Statistics (Last ${stats.period_days} days)</h3>
+                            </div>
+                            <div class="stat-row">
+                                <strong>Total Orders:</strong> ${stats.total_orders}
+                            </div>
+                            <div class="stat-row">
+                                <strong>Total Sales:</strong> ${stats.total_sales.toFixed(2)} грн
+                            </div>
+                            <div class="stat-row">
+                                <strong>Total Commission:</strong> ${stats.total_commission.toFixed(2)} грн
+                            </div>
+                            <div class="stat-row">
+                                <strong>Orders per Day:</strong> ${stats.orders_per_day.toFixed(2)}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    content.innerHTML = 'Failed to load statistics';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                content.innerHTML = 'Error loading statistics';
+            }
+        }
+
+        function closeStatsModal() {
+            document.getElementById('statsModal').style.display = 'none';
+        }
+
+        // Закрытие модальных окон при клике вне их области
+        window.onclick = function(event) {
+            const employeeModal = document.getElementById('employeeModal');
+            const statsModal = document.getElementById('statsModal');
+            if (event.target === employeeModal) {
+                employeeModal.style.display = 'none';
+            }
+            if (event.target === statsModal) {
+                statsModal.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>
